@@ -50,7 +50,7 @@ rule funannotate_predict:
         '-s ASW '
         '--transcript_evidence {input.trinity} '
         '-o {output} '
-        '-d {intput.db} '
+        '-d {input.db} '
         '--cpus {threads} '
         '&> {log}'
 
