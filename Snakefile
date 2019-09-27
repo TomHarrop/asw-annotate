@@ -45,6 +45,7 @@ rule funannotate_predict:
     singularity:
         'funannotate_1.6.0-ncbitools.sif'
     shell:
+        'export AUGUSTUS_CONFIG_PATH=/usr/share/augustus/config ; '
         'funannotate predict '
         '-i {input.fasta} '
         '-s ASW '
