@@ -43,7 +43,7 @@ rule funannotate_predict:
     threads:
         multiprocessing.cpu_count()
     singularity:
-        funannotate
+        'funannotate_1.6.0-ncbitools.sif'
     shell:
         'funannotate predict '
         '-i {input.fasta} '
