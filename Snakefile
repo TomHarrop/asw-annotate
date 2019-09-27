@@ -27,8 +27,31 @@ funannotate = 'shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
 
 rule target:
     input:
-        ('output/010_prepare/repeatmasker/'
-         'asw-cleaned_sorted.fasta.masked')
+        ('output/030_funannotate')
+
+# try to predict
+input:
+    fasta = ('output/010_prepare/repeatmasker/'
+             'asw-cleaned_sorted.fasta.masked'),
+    db = 'data/fundb_20190729',
+    trinity = 'data/Trinity.fasta'
+output:
+    directory('output/030_funannotate')
+log:
+    'output/logs/funannotate_predict.log'
+threads:
+    multiprocessing.cpu_count()
+singularity:
+    funannotate
+shell:
+    'funannotate predict '
+    '-i {input.fasta} '
+    '-s ASW '
+    '--transcript_evidence {input.trinity} '
+    '-o {output} '
+    '-d {intput.db} '
+    '&> {log}'
+
 
 # manually mask the assembly
 rule funnanotate_mask:
