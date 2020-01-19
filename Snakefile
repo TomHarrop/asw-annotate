@@ -2,11 +2,18 @@
 
 import multiprocessing
 import pathlib2
+import tempfile
 
 
 #############
 # FUNCTIONS #
 #############
+
+def busco_resolver(wildcards):
+    return({
+        'fasta': busco_inputs[wildcards.name]
+        })
+
 
 def resolve_path(x):
     return str(pathlib2.Path(x).resolve())
@@ -16,10 +23,29 @@ def resolve_path(x):
 # GLOBALS #
 ###########
 
-asw_assembly = 'data/flye_denovo_full.racon.fasta'
+asw_assembly = 'data/curated.fasta' # this is the purge_haplotigs output
+raw_read_dir = 'data/rnaseq_reads'
 
 # containers
 funannotate = 'shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
+# funannotate = 'funannotate_1.6.0-local.sif'
+busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
+
+########
+# MAIN #
+########
+
+busco_inputs = {
+    'predict_transcriptome':
+    'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+    'original_transcriptome':
+    'data/Trinity.fasta'
+}
+
+# get the trinity input
+all_rnaseq_samples = glob_wildcards(
+    f'{raw_read_dir}/{{sample}}_r1.fq.gz').sample
+
 
 #########
 # RULES #
@@ -27,34 +53,101 @@ funannotate = 'shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
 
 rule target:
     input:
-        ('output/030_funannotate')
+        ('output/020_funannotate/predict_results/ASW.gff3'),
+        expand('output/099_busco/run_{name}/full_table_{name}.tsv',
+               name=list(busco_inputs.keys()))
+
 
 # try to predict
 rule funannotate_predict:
     input:
+        'output/020_funannotate/training/funannotate_train.transcripts.gff3',
         fasta = ('output/010_prepare/repeatmasker/'
                  'asw-cleaned_sorted.fasta.masked'),
         db = 'data/fundb_20190729',
         trinity = 'data/Trinity.fasta'
     output:
-        directory('output/030_funannotate')
+        'output/020_funannotate/predict_results/ASW.gff3',
+        'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa'
+    params:
+        fasta = lambda wildcards, input: resolve_path(input.fasta),
+        db = lambda wildcards, input: resolve_path(input.db),
+        wd = resolve_path('output/020_funannotate')
     log:
         'output/logs/funannotate_predict.log'
     threads:
         multiprocessing.cpu_count()
     singularity:
-        'funannotate_1.6.0-ncbitools.sif'
+        funannotate
     shell:
-        'export AUGUSTUS_CONFIG_PATH=/usr/share/augustus/config ; '
+        'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
         'funannotate predict '
-        '-i {input.fasta} '
+        '-i {params.fasta} '
         '-s ASW '
         '--transcript_evidence {input.trinity} '
-        '-o {output} '
-        '-d {input.db} '
+        '-o {params.wd} '
+        '-d {params.db} '
+        '--cpus {threads} '
+        '--augustus_species lbonariensis '
+        '--busco_seed_species tribolium2012 '
+        '--busco_db endopterygota '
+        '--organism other '
+        '--repeats2evm '
+        '--max_intronlen 10000 '
+        '&> {log}'
+
+# run training algorithm
+rule funannotate_train:
+    input:
+        fasta = ('output/010_prepare/repeatmasker/'
+                 'asw-cleaned_sorted.fasta.masked'),
+        left = 'output/020_funannotate/rnaseq_r1.fq.gz',
+        right = 'output/020_funannotate/rnaseq_r2.fq.gz',
+        trinity = 'data/Trinity.fasta'
+    output:
+        'output/020_funannotate/training/funannotate_train.transcripts.gff3',
+    params:
+        fasta = lambda wildcards, input: resolve_path(input.fasta),
+        wd = resolve_path('output/020_funannotate'),
+    log:
+        'output/logs/funannotate_train.log'
+    threads:
+        multiprocessing.cpu_count()
+    singularity:
+        funannotate
+    shell:
+        'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
+        'funannotate train '
+        '--input {params.fasta} '
+        '--out {params.wd} '
+        '--left {input.left} '
+        '--right {input.right} '
+        '--stranded RF '
+        '--trinity {input.trinity} '
+        '--no_trimmomatic ' # disabling trimmomatic seems to disable normalising, bleuch
+        '--max_intronlen 10000 '
+        '--species ASW '
         '--cpus {threads} '
         '&> {log}'
 
+rule combine_rnaseq_reads:
+    input:
+        left = expand(f'{raw_read_dir}/{{sample}}_r1.fq.gz',
+                      sample=all_rnaseq_samples),
+        right = expand(f'{raw_read_dir}/{{sample}}_r2.fq.gz',
+                       sample=all_rnaseq_samples)
+    output:
+        left = temp('output/020_funannotate/rnaseq_r1.fq.gz'),
+        right = temp('output/020_funannotate/rnaseq_r2.fq.gz')
+    params:
+        left = lambda wildcards, input: sorted(set(input.left)),
+        right = lambda wildcards, input: sorted(set(input.right))
+    singularity:
+        funannotate
+    shell:
+        'cat {params.left} > {output.left} & '
+        'cat {params.right} > {output.right} & '
+        'wait' 
 
 # manually mask the assembly
 rule funnanotate_mask:
@@ -87,6 +180,7 @@ rule funnanotate_mask:
 
 
 # I don't think this can be done without the GIRINST library
+# instead, annotate with dfam? https://www.dfam.org/help/tools
 # rule funnanotate_mask_classify:
 #     input:
 #         'output/010_prepare/repeatmasker/families.stk',
@@ -186,3 +280,37 @@ rule funnanotate_clean:
         '--input {input} '
         '--out {output} '
         '&> {log}'
+
+
+# generic busco rule
+rule busco:
+    input:
+        unpack(busco_resolver),
+        lineage = 'data/endopterygota_odb9'
+    output:
+        'output/099_busco/run_{name}/full_table_{name}.tsv'
+    log:
+        resolve_path('output/logs/099_busco/{name}.log')
+    params:
+        wd = 'output/099_busco/',
+        fasta = lambda wildcards, input: resolve_path(input.fasta),
+        lineage = lambda wildcards, input: resolve_path(input.lineage),
+        tmpdir = tempfile.mkdtemp()
+    threads:
+        multiprocessing.cpu_count()
+    priority:
+        1
+    singularity:
+        busco
+    shell:
+        'cd {params.wd} || exit 1 ; '
+        'run_BUSCO.py '
+        '--force '
+        '--tmp_path {params.tmpdir} '
+        '--in {params.fasta} '
+        '--out {wildcards.name} '
+        '--lineage {params.lineage} '
+        '--cpu {threads} '
+        '--mode transcriptome '
+        '&> {log}'
+
