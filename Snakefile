@@ -27,8 +27,9 @@ asw_assembly = 'data/curated.fasta' # this is the purge_haplotigs output
 raw_read_dir = 'data/rnaseq_reads'
 
 # containers
-funannotate = 'shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
-# funannotate = 'funannotate_1.6.0-local.sif'
+# funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
+#                '@5d0496b71cc229fc31cf06953737f9c4038ee51a')
+funannotate = 'shub://TomHarrop/funannotate-singularity:funannotate_8e2e0a1'
 busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
 
 ########
@@ -223,7 +224,7 @@ rule funnanotate_mask_model:
         '-engine ncbi '
         '-pa {threads} '
         '-dir {params.wd} '
-        '-recoverDir {params.wd} '
+        # '-recoverDir {params.wd} '
         '&> {log}'
 
 rule funnanotate_mask_build:
