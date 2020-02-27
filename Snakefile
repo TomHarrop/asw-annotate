@@ -66,7 +66,7 @@ rule funannotate_predict:
         'output/020_funannotate/training/funannotate_train.transcripts.gff3',
         fasta = ('output/010_prepare/repeatmasker/'
                  'asw-cleaned_sorted.fasta.masked'),
-        db = 'data/fundb_20190729',
+        db = 'data/fundb_20200227',
         trinity = 'data/Trinity.fasta'
     output:
         'output/020_funannotate/predict_results/ASW.gff3',
