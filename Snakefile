@@ -91,6 +91,7 @@ rule funannotate_predict:
         '-d {params.db} '
         '--cpus {threads} '
         '--augustus_species lbonariensis '
+        '--optimize_augustus '
         '--busco_seed_species tribolium2012 '
         '--busco_db endopterygota '
         '--organism other '
