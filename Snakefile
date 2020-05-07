@@ -103,6 +103,8 @@ rule eggnog_mapper:
         resolve_path('output/logs/eggnog_mapper.log')
     threads:
         workflow.cores
+    singularity:
+        funannotate
     shell:
         'cd {params.wd} || exit 1 ; '
         'emapper.py '
