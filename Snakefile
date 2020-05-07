@@ -29,7 +29,8 @@ raw_read_dir = 'data/rnaseq_reads'
 # containers
 # funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
 #                '@5d0496b71cc229fc31cf06953737f9c4038ee51a')
-funannotate = 'shub://TomHarrop/funannotate-singularity:funannotate_1.7.4'
+funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.7.4'
+               '@c5e7e94e1830f825ad4dabc1af29413c65c3fd13')
 # funannotate = 'docker://reslp/funannotate:latest'
 busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
 
