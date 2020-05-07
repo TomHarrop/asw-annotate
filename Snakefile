@@ -79,7 +79,7 @@ rule funannotate_annotate:
         funannotate
     shell:
         'funannotate annotate '
-        '--i {params.predict_dir} '
+        '--input {params.predict_dir} '
         '--out {params.wd} '
         '-s ASW '
         '--sbt '
