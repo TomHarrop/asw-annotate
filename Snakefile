@@ -16,7 +16,7 @@ def busco_resolver(wildcards):
 
 
 def resolve_path(x):
-    return Path(x).resolve().as_posix()
+    return Path(x).resolve()
 
 
 ###########
@@ -87,6 +87,33 @@ rule funannotate_annotate:
         '--cpus {threads} '
         '&> {log}'
 
+# run eggnog-mapper manually
+rule eggnog_mapper:
+    input:
+        fa = 'output/020_funannotate/predict_results/ASW.proteins.fa',
+        db = 'data/eggnog_proteins.dmnd'
+    output:
+        'output/030_eggnog/idk'
+    params:
+        fa = lambda wildcards, input: resolve_path(input.fa),
+        wd = resolve_path('output/030_eggnog'),
+        db = lambda wildcards, input: resolve_path(input.db),
+        db_path = lambda wildcards, input: resolve_path(input.db).parent
+    log:
+        resolve_path('output/logs/eggnog_mapper.log')
+    threads:
+        workflow.cores
+    shell:
+        'cd {params.wd} || exit 1 ; '
+        'emapper.py '
+        '-m diamond '
+        '-i {params.fa} '
+        '-o eggnog '
+        '--dmnd_db {params.db} '
+        '--data_dir {params.dp_path} '
+        '--cpu {threads} '
+        '&> {log}'
+
 
 # try to predict
 rule funannotate_predict:
@@ -98,7 +125,8 @@ rule funannotate_predict:
         trinity = 'data/Trinity.fasta'
     output:
         'output/020_funannotate/predict_results/ASW.gff3',
-        'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa'
+        'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+        'output/020_funannotate/predict_results/ASW.proteins.fa'
     params:
         fasta = lambda wildcards, input: resolve_path(input.fasta),
         db = lambda wildcards, input: resolve_path(input.db),
