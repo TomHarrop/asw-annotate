@@ -56,9 +56,37 @@ all_rnaseq_samples = glob_wildcards(
 
 rule target:
     input:
-        ('output/020_funannotate/predict_results/ASW.gff3'),
+        'output/020_funannotate/idk',
         expand('output/099_busco/run_{name}/full_table_{name}.tsv',
                name=list(busco_inputs.keys()))
+
+# annotate
+rule funannotate_annotate:
+    input:
+        'output/020_funannotate/predict_results/ASW.gff3',
+        db = 'data/fundb_20200227',
+    output:
+        directory('output/020_funannotate/idk')
+    params:
+        predict_dir = resolve_path('output/020_funannotate/predict_results'),
+        db = lambda wildcards, input: resolve_path(input.db),
+        wd = resolve_path('output/020_funannotate')
+    log:
+        'output/logs/funannotate_annotate.log'
+    threads:
+        workflow.cores
+    singularity:
+        funannotate
+    shell:
+        'funannotate annotate '
+        '--i {params.predict_dir} '
+        '--out {params.wd} '
+        '-s ASW '
+        '--sbt '
+        '--busco_db endopterygota '
+        '-d {params.db} '
+        '--cpus {threads} '
+        '&> {log}'
 
 
 # try to predict
@@ -101,6 +129,7 @@ rule funannotate_predict:
         '&> {log}'
 
 # run training algorithm
+# DON'T RUN WITH CONTAINALL
 rule funannotate_train:
     input:
         fasta = 'output/010_prepare/repeatmasker/asw-cleaned_sorted.fasta.masked',
