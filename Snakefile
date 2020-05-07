@@ -56,7 +56,7 @@ all_rnaseq_samples = glob_wildcards(
 
 rule target:
     input:
-        'output/020_funannotate/idk',
+        'output/020_funannotate/annotate_results/ASW.annotations.txt',
         expand('output/099_busco/run_{name}/full_table_{name}.tsv',
                name=list(busco_inputs.keys()))
 
@@ -66,7 +66,7 @@ rule funannotate_annotate:
         'output/020_funannotate/predict_results/ASW.gff3',
         db = 'data/fundb_20200227',
     output:
-        directory('output/020_funannotate/idk')
+        'output/020_funannotate/annotate_results/ASW.annotations.txt'
     params:
         predict_dir = resolve_path('output/020_funannotate/predict_results'),
         db = lambda wildcards, input: resolve_path(input.db),
