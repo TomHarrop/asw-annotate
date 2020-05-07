@@ -82,7 +82,6 @@ rule funannotate_annotate:
         '--input {params.predict_dir} '
         '--out {params.wd} '
         '-s ASW '
-        '--sbt '
         '--busco_db endopterygota '
         '-d {params.db} '
         '--cpus {threads} '
