@@ -118,6 +118,7 @@ rule funannotate_train:
     singularity:
         funannotate
     shell:
+        'cp {input.trinity} {params.wd}/trinity.fasta ; '
         'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
         'funannotate train '
         '--input {params.fasta} '
@@ -125,7 +126,7 @@ rule funannotate_train:
         '--left {input.left} '
         '--right {input.right} '
         '--stranded RF '
-        '--trinity {input.trinity} '
+        '--trinity {params.wd}/trinity.fasta '
         # '--no_trimmomatic ' # disabling trimmomatic seems to disable normalising, bleuch
         '--max_intronlen 10000 '
         '--species ASW '
