@@ -110,7 +110,7 @@ rule eggnog_mapper:
         '-i {params.fa} '
         '-o eggnog '
         '--dmnd_db {params.db} '
-        '--data_dir {params.dp_path} '
+        '--data_dir {params.db_path} '
         '--cpu {threads} '
         '&> {log}'
 
