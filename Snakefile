@@ -109,6 +109,7 @@ rule iprscan:
         'interproscan_5.44-79.0.sif'
     shell:
         'interproscan.sh '
+        '-dp '
         '-i {input} '
         '--tempdir {params.tmpdir} '
         '--output-dir {params.wd} '
