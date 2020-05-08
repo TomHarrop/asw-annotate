@@ -90,6 +90,31 @@ rule funannotate_annotate:
         '--cpus {threads} '
         '&> {log}'
 
+
+# run iprscan manually
+rule iprscan:
+    input:
+        'output/020_funannotate/predict_results/ASW.proteins.fa'
+    output:
+        'output/040_interproscan/ASW.proteins.fa.xml'
+    log:
+        'output/logs/iprscan.log'
+    params:
+        wd = 'output/040_interproscan',
+        tmpdir = tempfile.mkdtemp()
+    threads:
+        workflow.cores
+    # can't put on shub, see github.com/tomharrop/funannotate-singularity
+    singularity:
+        'interproscan_5.44-79.0.sif'
+    shell:
+        'interproscan.sh '
+        '-i {input} '
+        '--tempdir {params.tmpdir} '
+        '--output-dir {params.wd} '
+        '--cpu {threads} '
+        '&> {log}'
+
 # run eggnog-mapper manually
 rule eggnog_mapper:
     input:
