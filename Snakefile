@@ -64,13 +64,15 @@ rule target:
 rule funannotate_annotate:
     input:
         'output/020_funannotate/predict_results/ASW.gff3',
+        annot = 'output/030_eggnog/eggnog.emapper.annotations',
         db = 'data/fundb_20200227',
     output:
         'output/020_funannotate/annotate_results/ASW.annotations.txt'
     params:
         predict_dir = resolve_path('output/020_funannotate/predict_results'),
         db = lambda wildcards, input: resolve_path(input.db),
-        wd = resolve_path('output/020_funannotate')
+        wd = resolve_path('output/020_funannotate'),
+        annot = lambda wildcards, input: resolve_path(input.annot),
     log:
         'output/logs/funannotate_annotate.log'
     threads:
@@ -82,6 +84,7 @@ rule funannotate_annotate:
         '--input {params.predict_dir} '
         '--out {params.wd} '
         '-s ASW '
+        '--eggnog {params.annot} '
         '--busco_db endopterygota '
         '-d {params.db} '
         '--cpus {threads} '
@@ -93,7 +96,7 @@ rule eggnog_mapper:
         fa = 'output/020_funannotate/predict_results/ASW.proteins.fa',
         db = 'data/eggnog_proteins.dmnd'
     output:
-        'output/030_eggnog/idk'
+        'output/030_eggnog/eggnog.emapper.annotations'
     params:
         fa = lambda wildcards, input: resolve_path(input.fa),
         wd = resolve_path('output/030_eggnog'),
