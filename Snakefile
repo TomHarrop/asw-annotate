@@ -31,6 +31,7 @@ raw_read_dir = 'data/rnaseq_reads'
 #                '@5d0496b71cc229fc31cf06953737f9c4038ee51a')
 funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.7.4'
                '@c5e7e94e1830f825ad4dabc1af29413c65c3fd13')
+funannotate_conda = 'funannotate-conda_1.7.4.sif'
 # funannotate = 'docker://reslp/funannotate:latest'
 busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
 
@@ -80,8 +81,9 @@ rule funannotate_annotate:
     threads:
         workflow.cores
     singularity:
-        funannotate
+        funannotate_conda
     shell:
+        'bash -c \''
         'funannotate annotate '
         '--input {params.predict_dir} '
         '--out {params.wd} '
@@ -91,7 +93,7 @@ rule funannotate_annotate:
         '--busco_db endopterygota '
         '-d {params.db} '
         '--cpus {threads} '
-        '&> {log}'
+        '\' &> {log}'
 
 
 # run iprscan manually
@@ -170,8 +172,9 @@ rule funannotate_predict:
     threads:
         multiprocessing.cpu_count()
     singularity:
-        funannotate
+        funannotate_conda
     shell:
+        'bash -c \''
         'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
         'funannotate predict '
         '-i {params.fasta} '
@@ -187,7 +190,7 @@ rule funannotate_predict:
         '--organism other '
         '--repeats2evm '
         '--max_intronlen 10000 '
-        '&> {log}'
+        '\' &> {log}'
 
 # run training algorithm
 # DON'T RUN WITH CONTAINALL
@@ -207,8 +210,9 @@ rule funannotate_train:
     threads:
         multiprocessing.cpu_count()
     singularity:
-        funannotate
+        funannotate_conda
     shell:
+        'bash -c \''
         'cp {input.trinity} {params.wd}/trinity.fasta ; '
         'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
         'funannotate train '
@@ -217,12 +221,12 @@ rule funannotate_train:
         '--left {input.left} '
         '--right {input.right} '
         '--stranded RF '
-        '--trinity {params.wd}/trinity.fasta '
+        # '--trinity {params.wd}/trinity.fasta '
         # '--no_trimmomatic ' # disabling trimmomatic seems to disable normalising, bleuch
         '--max_intronlen 10000 '
         '--species ASW '
         '--cpus {threads} '
-        '&> {log}'
+        '\' &> {log}'
 
 rule combine_rnaseq_reads:
     input:
@@ -254,13 +258,14 @@ rule fa_mask:
     threads:
         workflow.cores
     singularity:
-        funannotate
+        funannotate_conda
     shell:
+        'bash -c \''
         'funannotate mask '
         '-i {input} '
         '-o {output} '
         '--cpus {threads} '
-        '&> {log}'
+        '\' &> {log}'
 
 
 # generic busco rule
