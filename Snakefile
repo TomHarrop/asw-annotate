@@ -179,7 +179,7 @@ rule funannotate_predict:
         'funannotate predict '
         '-i {params.fasta} '
         '-s ASW '
-        '--transcript_evidence {input.trinity} '
+        # '--transcript_evidence {input.trinity} '
         '-o {params.wd} '
         '-d {params.db} '
         '--cpus {threads} '
@@ -189,7 +189,7 @@ rule funannotate_predict:
         '--busco_db endopterygota '
         '--organism other '
         '--repeats2evm '
-        '--max_intronlen 10000 '
+        '--max_intronlen 100000 '
         '\' &> {log}'
 
 # run training algorithm
