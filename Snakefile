@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import multiprocessing
 from pathlib import Path
 import tempfile
 
@@ -27,12 +26,10 @@ asw_assembly = 'data/curated.fasta' # this is the purge_haplotigs output
 raw_read_dir = 'data/rnaseq_reads'
 
 # containers
-# funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
-#                '@5d0496b71cc229fc31cf06953737f9c4038ee51a')
 funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.7.4'
                '@c5e7e94e1830f825ad4dabc1af29413c65c3fd13')
-funannotate_conda = 'funannotate-conda_1.7.4.sif'
-# funannotate = 'docker://reslp/funannotate:latest'
+funannotate_conda = ('shub://TomHarrop/funannotate-singularity:'
+                     'funannotate-conda_1.7.4')
 busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
 
 ########
@@ -41,7 +38,7 @@ busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
 
 busco_inputs = {
     'predict_transcriptome':
-    'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+    'output/020_funannotate/annotate_results/ASW.mrna-transcripts.fa',
     'original_transcriptome':
     'data/Trinity.fasta'
 }
@@ -69,7 +66,8 @@ rule funannotate_annotate:
         ipr = 'output/040_interproscan/ASW.proteins.fa.xml',
         db = 'data/fundb_20200227',
     output:
-        'output/020_funannotate/annotate_results/ASW.annotations.txt'
+        'output/020_funannotate/annotate_results/ASW.annotations.txt',
+        'output/020_funannotate/annotate_results/ASW.mrna-transcripts.fa'
     params:
         predict_dir = resolve_path('output/020_funannotate/predict_results'),
         db = lambda wildcards, input: resolve_path(input.db),
@@ -140,6 +138,7 @@ rule eggnog_mapper:
     singularity:
         funannotate
     shell:
+        'bash -c \''
         'cd {params.wd} || exit 1 ; '
         'emapper.py '
         '-m diamond '
@@ -148,7 +147,7 @@ rule eggnog_mapper:
         '--dmnd_db {params.db} '
         '--data_dir {params.db_path} '
         '--cpu {threads} '
-        '&> {log}'
+        '\' &> {log}'
 
 
 # try to predict
@@ -157,8 +156,7 @@ rule funannotate_predict:
         'output/020_funannotate/training/funannotate_train.transcripts.gff3',
         fasta = ('output/010_prepare/repeatmasker/'
                  'asw-cleaned_sorted.fasta.masked'),
-        db = 'data/fundb_20200227',
-        trinity = 'data/Trinity.fasta'
+        db = 'data/fundb_20200227'
     output:
         'output/020_funannotate/predict_results/ASW.gff3',
         'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
@@ -170,7 +168,7 @@ rule funannotate_predict:
     log:
         'output/logs/funannotate_predict.log'
     threads:
-        multiprocessing.cpu_count()
+        workflow.cores
     singularity:
         funannotate_conda
     shell:
@@ -189,7 +187,7 @@ rule funannotate_predict:
         '--busco_db endopterygota '
         '--organism other '
         '--repeats2evm '
-        '--max_intronlen 100000 '
+        '--max_intronlen 50000 '
         '\' &> {log}'
 
 # run training algorithm
@@ -199,7 +197,6 @@ rule funannotate_train:
         fasta = 'output/010_prepare/repeatmasker/asw-cleaned_sorted.fasta.masked',
         left = 'output/020_funannotate/rnaseq_r1.fq.gz',
         right = 'output/020_funannotate/rnaseq_r2.fq.gz',
-        trinity = 'data/Trinity.fasta'
     output:
         'output/020_funannotate/training/funannotate_train.transcripts.gff3',
     params:
@@ -208,12 +205,11 @@ rule funannotate_train:
     log:
         'output/logs/funannotate_train.log'
     threads:
-        multiprocessing.cpu_count()
+        workflow.cores
     singularity:
         funannotate_conda
     shell:
         'bash -c \''
-        'cp {input.trinity} {params.wd}/trinity.fasta ; '
         'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
         'funannotate train '
         '--input {params.fasta} '
@@ -283,7 +279,7 @@ rule busco:
         lineage = lambda wildcards, input: resolve_path(input.lineage),
         tmpdir = tempfile.mkdtemp()
     threads:
-        multiprocessing.cpu_count()
+        workflow.cores
     priority:
         1
     singularity:
