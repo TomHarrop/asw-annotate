@@ -150,6 +150,29 @@ rule eggnog_mapper:
         '\' &> {log}'
 
 
+# update models
+rule funannotate_update:
+    input:
+        fasta = ('output/010_prepare/repeatmasker/'
+                 'asw-cleaned_sorted.fasta.masked'),
+        'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+    output:
+        'output/020_funannotate/update_results/idk'
+    params:
+        wd = resolve_path('output/020_funannotate')
+    log:
+        'output/logs/funannotate_update.log'
+    threads:
+        workflow.cores
+    singularity:
+        funannotate_conda
+    shell:
+        'bash -c \''
+        'funannotate update '
+        '-i {params.wd} '
+        '--cpus {threads} '
+        '\' &> {log}'
+
 # try to predict
 rule funannotate_predict:
     input:
