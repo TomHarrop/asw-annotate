@@ -153,9 +153,9 @@ rule eggnog_mapper:
 # update models
 rule funannotate_update:
     input:
-        fasta = ('output/010_prepare/repeatmasker/'
-                 'asw-cleaned_sorted.fasta.masked'),
         'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+        fasta = ('output/010_prepare/repeatmasker/'
+                 'asw-cleaned_sorted.fasta.masked')
     output:
         'output/020_funannotate/update_results/idk'
     params:
