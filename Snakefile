@@ -136,7 +136,7 @@ rule eggnog_mapper:
     threads:
         workflow.cores
     singularity:
-        funannotate
+        funannotate_conda
     shell:
         'bash -c \''
         'cd {params.wd} || exit 1 ; '
