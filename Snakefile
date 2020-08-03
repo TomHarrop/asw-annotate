@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-import multiprocessing
-import pathlib2
+from pathlib import Path
 import tempfile
 
 
@@ -16,7 +15,7 @@ def busco_resolver(wildcards):
 
 
 def resolve_path(x):
-    return str(pathlib2.Path(x).resolve())
+    return Path(x).resolve()
 
 
 ###########
@@ -27,10 +26,10 @@ asw_assembly = 'data/curated.fasta' # this is the purge_haplotigs output
 raw_read_dir = 'data/rnaseq_reads'
 
 # containers
-# funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.6.0'
-#                '@5d0496b71cc229fc31cf06953737f9c4038ee51a')
-funannotate = 'shub://TomHarrop/funannotate-singularity:funannotate_1.7.4'
-# funannotate = 'docker://reslp/funannotate:latest'
+funannotate = ('shub://TomHarrop/funannotate-singularity:funannotate_1.7.4'
+               '@c5e7e94e1830f825ad4dabc1af29413c65c3fd13')
+funannotate_conda = ('shub://TomHarrop/funannotate-singularity:'
+                     'funannotate-conda_1.7.4')
 busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
 
 ########
@@ -39,7 +38,7 @@ busco = 'shub://TomHarrop/singularity-containers:busco_3.0.2'
 
 busco_inputs = {
     'predict_transcriptome':
-    'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+    'output/020_funannotate/annotate_results/ASW.mrna-transcripts.fa',
     'original_transcriptome':
     'data/Trinity.fasta'
 }
@@ -55,10 +54,125 @@ all_rnaseq_samples = glob_wildcards(
 
 rule target:
     input:
-        ('output/020_funannotate/predict_results/ASW.gff3'),
+        'output/020_funannotate/annotate_results/ASW.annotations.txt',
         expand('output/099_busco/run_{name}/full_table_{name}.tsv',
                name=list(busco_inputs.keys()))
 
+# annotate
+rule funannotate_annotate:
+    input:
+        'output/020_funannotate/predict_results/ASW.gff3',
+        egg = 'output/030_eggnog/eggnog.emapper.annotations',
+        ipr = 'output/040_interproscan/ASW.proteins.fa.xml',
+        db = 'data/fundb_20200227',
+    output:
+        'output/020_funannotate/annotate_results/ASW.annotations.txt',
+        'output/020_funannotate/annotate_results/ASW.mrna-transcripts.fa'
+    params:
+        predict_dir = resolve_path('output/020_funannotate/predict_results'),
+        db = lambda wildcards, input: resolve_path(input.db),
+        wd = resolve_path('output/020_funannotate'),
+        egg = lambda wildcards, input: resolve_path(input.egg),
+        ipr = lambda wildcards, input: resolve_path(input.ipr),
+    log:
+        'output/logs/funannotate_annotate.log'
+    threads:
+        workflow.cores
+    singularity:
+        funannotate_conda
+    shell:
+        'bash -c \''
+        'funannotate annotate '
+        '--input {params.predict_dir} '
+        '--out {params.wd} '
+        '-s ASW '
+        '--eggnog {params.egg} '
+        '--iprscan {params.ipr} '
+        '--busco_db endopterygota '
+        '-d {params.db} '
+        '--cpus {threads} '
+        '\' &> {log}'
+
+
+# run iprscan manually
+rule iprscan:
+    input:
+        'output/020_funannotate/predict_results/ASW.proteins.fa'
+    output:
+        'output/040_interproscan/ASW.proteins.fa.xml'
+    log:
+        'output/logs/iprscan.log'
+    params:
+        wd = 'output/040_interproscan',
+        tmpdir = tempfile.mkdtemp()
+    threads:
+        workflow.cores
+    # can't put on shub, see github.com/tomharrop/funannotate-singularity
+    singularity:
+        'interproscan_5.44-79.0.sif'
+    shell:
+        'interproscan.sh '
+        '-dp '
+        '-i {input} '
+        '--tempdir {params.tmpdir} '
+        '--output-dir {params.wd} '
+        '--cpu {threads} '
+        '&> {log}'
+
+# run eggnog-mapper manually
+rule eggnog_mapper:
+    input:
+        fa = 'output/020_funannotate/predict_results/ASW.proteins.fa',
+        db = 'data/eggnog_proteins.dmnd'
+    output:
+        'output/030_eggnog/eggnog.emapper.annotations'
+    params:
+        fa = lambda wildcards, input: resolve_path(input.fa),
+        wd = resolve_path('output/030_eggnog'),
+        db = lambda wildcards, input: resolve_path(input.db),
+        db_path = lambda wildcards, input: resolve_path(input.db).parent
+    log:
+        resolve_path('output/logs/eggnog_mapper.log')
+    threads:
+        workflow.cores
+    singularity:
+        funannotate_conda
+    shell:
+        'bash -c \''
+        'cd {params.wd} || exit 1 ; '
+        'emapper.py '
+        '-m diamond '
+        '-i {params.fa} '
+        '-o eggnog '
+        '--dmnd_db {params.db} '
+        '--data_dir {params.db_path} '
+        '--cpu {threads} '
+        '\' &> {log}'
+
+
+# update models - not working in 1.7.4
+# Error: input file 'long-reads.mapped.fasta' not found 
+# rule funannotate_update:
+#     input:
+#         'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+#         fasta = ('output/010_prepare/repeatmasker/'
+#                  'asw-cleaned_sorted.fasta.masked')
+#     output:
+#         'output/020_funannotate/update_results/idk'
+#     params:
+#         wd = resolve_path('output/020_funannotate')
+#     log:
+#         'output/logs/funannotate_update.log'
+#     threads:
+#         workflow.cores
+#     singularity:
+#         funannotate_conda
+#     shell:
+#         'bash -c \''
+#         'funannotate update '
+#         '-i {params.wd} '
+#         '--cpus {threads} '
+#         '\' &> {log}'
 
 # try to predict
 rule funannotate_predict:
@@ -66,11 +180,11 @@ rule funannotate_predict:
         'output/020_funannotate/training/funannotate_train.transcripts.gff3',
         fasta = ('output/010_prepare/repeatmasker/'
                  'asw-cleaned_sorted.fasta.masked'),
-        db = 'data/fundb_20200227',
-        trinity = 'data/Trinity.fasta'
+        db = 'data/fundb_20200227'
     output:
         'output/020_funannotate/predict_results/ASW.gff3',
-        'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa'
+        'output/020_funannotate/predict_results/ASW.mrna-transcripts.fa',
+        'output/020_funannotate/predict_results/ASW.proteins.fa'
     params:
         fasta = lambda wildcards, input: resolve_path(input.fasta),
         db = lambda wildcards, input: resolve_path(input.db),
@@ -78,15 +192,16 @@ rule funannotate_predict:
     log:
         'output/logs/funannotate_predict.log'
     threads:
-        multiprocessing.cpu_count()
+        workflow.cores
     singularity:
-        funannotate
+        funannotate_conda
     shell:
+        'bash -c \''
         'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
         'funannotate predict '
         '-i {params.fasta} '
         '-s ASW '
-        '--transcript_evidence {input.trinity} '
+        # '--transcript_evidence {input.trinity} '
         '-o {params.wd} '
         '-d {params.db} '
         '--cpus {threads} '
@@ -96,17 +211,16 @@ rule funannotate_predict:
         '--busco_db endopterygota '
         '--organism other '
         '--repeats2evm '
-        '--max_intronlen 10000 '
-        '&> {log}'
+        '--max_intronlen 50000 '
+        '\' &> {log}'
 
 # run training algorithm
+# DON'T RUN WITH CONTAINALL
 rule funannotate_train:
     input:
-        fasta = ('output/010_prepare/repeatmasker/'
-                 'asw-cleaned_sorted.fasta.masked'),
+        fasta = 'output/010_prepare/repeatmasker/asw-cleaned_sorted.fasta.masked',
         left = 'output/020_funannotate/rnaseq_r1.fq.gz',
         right = 'output/020_funannotate/rnaseq_r2.fq.gz',
-        trinity = 'data/Trinity.fasta'
     output:
         'output/020_funannotate/training/funannotate_train.transcripts.gff3',
     params:
@@ -115,10 +229,11 @@ rule funannotate_train:
     log:
         'output/logs/funannotate_train.log'
     threads:
-        multiprocessing.cpu_count()
+        workflow.cores
     singularity:
-        funannotate
+        funannotate_conda
     shell:
+        'bash -c \''
         'cp /genemark/gm_key_64 ${{HOME}}/.gm_key ; '
         'funannotate train '
         '--input {params.fasta} '
@@ -126,12 +241,12 @@ rule funannotate_train:
         '--left {input.left} '
         '--right {input.right} '
         '--stranded RF '
-        '--trinity {input.trinity} '
-        '--no_trimmomatic ' # disabling trimmomatic seems to disable normalising, bleuch
+        # '--trinity {params.wd}/trinity.fasta '
+        # '--no_trimmomatic ' # disabling trimmomatic seems to disable normalising, bleuch
         '--max_intronlen 10000 '
         '--species ASW '
         '--cpus {threads} '
-        '&> {log}'
+        '\' &> {log}'
 
 rule combine_rnaseq_reads:
     input:
@@ -150,139 +265,27 @@ rule combine_rnaseq_reads:
     shell:
         'cat {params.left} > {output.left} & '
         'cat {params.right} > {output.right} & '
-        'wait' 
+        'wait'
 
-# manually mask the assembly
-rule funnanotate_mask:
-    input:
-        cons = 'output/010_prepare/repeatmasker/consensi.fa',
-        fasta = 'output/010_prepare/repeatmasker/asw-cleaned_sorted.fasta'
-    output:
-        ('output/010_prepare/repeatmasker/'
-         'asw-cleaned_sorted.fasta.masked')
-    params:
-        wd = resolve_path('output/010_prepare/repeatmasker'),
-        lib = lambda wildcards, input: resolve_path(input.cons),
-        fasta = lambda wildcards, input: resolve_path(input.fasta)
-    log:
-        resolve_path('output/logs/funnanotate_mask.log')
-    threads:
-        multiprocessing.cpu_count()
-    singularity:
-        funannotate
-    shell:
-        'cd {params.wd} || exit 1 ; '
-        'RepeatMasker '
-        '-engine ncbi '
-        '-pa {threads} '
-        '-lib {params.lib} '
-        '-dir {params.wd} '
-        '-gccalc -xsmall -gff -html '
-        '{params.fasta} '
-        '&> {log}'
-
-
-# I don't think this can be done without the GIRINST library
-# instead, annotate with dfam? https://www.dfam.org/help/tools
-# rule funnanotate_mask_classify:
-#     input:
-#         'output/010_prepare/repeatmasker/families.stk',
-#         'output/010_prepare/repeatmasker/consensi.fa'
-#     output:
-#         'output/010_prepare/repeatmasker/consensi.fa.classified'
-#     params:
-#         wd = resolve_path('output/010_prepare/repeatmasker'),
-#     log:
-#         resolve_path('output/logs/funnanotate_mask-classify.log')
-#     singularity:
-#         "funannotate_1.6.0-rminstall.sif"
-#     shell:
-#         'cd {params.wd} || exit 1 ; '
-#         'RepeatClassifier '
-#         '-engine ncbi '
-#         '-consensi consensi.fa '
-#         '-stockholm families.stk '
-#         '&> {log}'
-
-
-rule funnanotate_mask_model:
-    input:
-        'output/010_prepare/repeatmasker/ASW.translation'
-    output:
-        'output/010_prepare/repeatmasker/families.stk',
-        'output/010_prepare/repeatmasker/consensi.fa'
-    params:
-        wd = resolve_path('output/010_prepare/repeatmasker'),
-    log:
-        resolve_path('output/logs/funnanotate_mask-model.log')
-    threads:
-        multiprocessing.cpu_count()
-    singularity:
-        funannotate
-    shell:
-        'cd {params.wd} || exit 1 ; '
-        'RepeatModeler '
-        '-database ASW '
-        '-engine ncbi '
-        '-pa {threads} '
-        '-dir {params.wd} '
-        # '-recoverDir {params.wd} '
-        '&> {log}'
-
-rule funnanotate_mask_build:
-    input:
-        fasta = 'output/010_prepare/asw-cleaned_sorted.fasta'
-    output:
-        'output/010_prepare/repeatmasker/ASW.translation',
-        'output/010_prepare/repeatmasker/asw-cleaned_sorted.fasta'
-    params:
-        wd = resolve_path('output/010_prepare/repeatmasker'),
-        fasta = lambda wildcards, input: resolve_path(input.fasta)
-    log:
-        resolve_path('output/logs/funnanotate_mask-build.log')
-    threads:
-        multiprocessing.cpu_count()
-    singularity:
-        funannotate
-    shell:
-        'cd {params.wd} || exit 1 ; '
-        'cp {params.fasta} . ; '
-        'BuildDatabase '
-        '-name ASW '
-        '-engine ncbi '
-        '-dir {params.wd} '
-        '&> {log} '
-
-rule funnanotate_sort:
-    input:
-        'output/010_prepare/asw-cleaned.fasta'
-    output:
-        'output/010_prepare/asw-cleaned_sorted.fasta'
-    log:
-        'output/logs/funnanotate_sort.log'
-    singularity:
-        funannotate
-    shell:
-        'funannotate sort '
-        '--input {input} '
-        '--out {output} '
-        '&> {log}'
-
-
-rule funnanotate_clean:
+# funannotate mask?
+rule fa_mask:
     input:
         asw_assembly
     output:
-        'output/010_prepare/asw-cleaned.fasta'
+        'output/010_prepare/repeatmasker/asw-cleaned_sorted.fasta.masked'
     log:
-        'output/logs/funnanotate_clean.log'
+        'output/logs/fa_mask.log'
+    threads:
+        workflow.cores
     singularity:
-        funannotate
+        funannotate_conda
     shell:
-        'funannotate clean '
-        '--input {input} '
-        '--out {output} '
-        '&> {log}'
+        'bash -c \''
+        'funannotate mask '
+        '-i {input} '
+        '-o {output} '
+        '--cpus {threads} '
+        '\' &> {log}'
 
 
 # generic busco rule
@@ -300,7 +303,7 @@ rule busco:
         lineage = lambda wildcards, input: resolve_path(input.lineage),
         tmpdir = tempfile.mkdtemp()
     threads:
-        multiprocessing.cpu_count()
+        workflow.cores
     priority:
         1
     singularity:
